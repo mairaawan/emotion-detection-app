@@ -62,7 +62,7 @@ st.sidebar.header("About")
 st.sidebar.markdown("""
 - **Model:** CNN trained on FER dataset  
 - **Classes:** angry, disgust, fear, happy, neutral, sad, surprise  
-- **Author:** Your Name  
+- **Author:** Maira Farooq 
 """)
 
 # Select input mode
@@ -107,3 +107,4 @@ elif mode == "Use Webcam":
         stframe.image(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
         
     cap.release()
+
