@@ -1,60 +1,32 @@
 # ================= IMPORTS =================
 import streamlit as st
+import cv2
 import torch
 import torch.nn as nn
-from torchvision import transforms
-import cv2
-from PIL import Image
+import torchvision.transforms as transforms
 import numpy as np
-import os
+from PIL import Image
 
 # ================= CONFIG =================
-MODEL_PATH = "emotion_model.pth"   # your trained model
-NUM_CLASSES = 7
+MODEL_PATH = "emotion_model.pth"
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-EMOTIONS = ['angry', 'disgust', 'fear', 'happy', 'neutral', 'sad', 'surprise']
+NUM_CLASSES = 7
+CLASSES = ['angry', 'disgust', 'fear', 'happy', 'neutral', 'sad', 'surprise']
 
 # ================= MODEL =================
 class FER_CNN(nn.Module):
     def __init__(self):
         super().__init__()
         self.features = nn.Sequential(
-            nn.Conv2d(1, 64, 3, padding=1),
-            nn.ReLU(),
-            nn.BatchNorm2d(64),
-            nn.MaxPool2d(2),
-            nn.Dropout(0.25),
-
-            nn.Conv2d(64, 128, 5, padding=2),
-            nn.ReLU(),
-            nn.BatchNorm2d(128),
-            nn.MaxPool2d(2),
-            nn.Dropout(0.25),
-
-            nn.Conv2d(128, 256, 3, padding=1),
-            nn.ReLU(),
-            nn.BatchNorm2d(256),
-            nn.MaxPool2d(2),
-            nn.Dropout(0.25),
-
-            nn.Conv2d(256, 512, 3, padding=1),
-            nn.ReLU(),
-            nn.BatchNorm2d(512),
-            nn.MaxPool2d(2),
-            nn.Dropout(0.25),
+            nn.Conv2d(1, 64, 3, padding=1), nn.ReLU(), nn.BatchNorm2d(64), nn.MaxPool2d(2),
+            nn.Conv2d(64, 128, 5, padding=2), nn.ReLU(), nn.BatchNorm2d(128), nn.MaxPool2d(2),
+            nn.Conv2d(128, 256, 3, padding=1), nn.ReLU(), nn.BatchNorm2d(256), nn.MaxPool2d(2),
+            nn.Conv2d(256, 512, 3, padding=1), nn.ReLU(), nn.BatchNorm2d(512), nn.MaxPool2d(2),
         )
-
         self.classifier = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(512 * 3 * 3, 256),
-            nn.ReLU(),
-            nn.BatchNorm1d(256),
-            nn.Dropout(0.25),
-            nn.Linear(256, 512),
-            nn.ReLU(),
-            nn.BatchNorm1d(512),
-            nn.Dropout(0.25),
-            nn.Linear(512, NUM_CLASSES)
+            nn.Linear(512 * 3 * 3, 256), nn.ReLU(),
+            nn.Linear(256, NUM_CLASSES)
         )
 
     def forward(self, x):
@@ -70,68 +42,68 @@ def load_model():
 
 model = load_model()
 
-# ================= TRANSFORM =================
+# ================= TRANSFORMS =================
 transform = transforms.Compose([
     transforms.Grayscale(1),
-    transforms.Resize((48, 48)),
+    transforms.Resize((48,48)),
     transforms.ToTensor(),
     transforms.Normalize((0.5,), (0.5,))
 ])
 
-# ================= STREAMLIT UI =================
-st.set_page_config(page_title="Emotion Detection App", layout="wide")
-st.title("😊 Real-Time Emotion Detection")
-st.markdown("This app detects facial emotions from your camera in real-time using a trained CNN model.")
+# ================= STREAMLIT APP =================
+st.set_page_config(page_title="Emotion Detection", layout="wide")
+st.title("🎭 Real-Time Emotion Detection")
+st.markdown("""
+This app uses a trained CNN to detect emotions from facial expressions in real-time.
+""")
 
-# Sidebar
-st.sidebar.header("Settings")
-run_camera = st.sidebar.checkbox("Enable Camera", value=False)
-uploaded_file = st.sidebar.file_uploader("Upload an Image", type=["jpg", "png"])
+# Sidebar info
+st.sidebar.header("About")
+st.sidebar.markdown("""
+- **Model:** CNN trained on FER dataset  
+- **Classes:** angry, disgust, fear, happy, neutral, sad, surprise  
+- **Author:** Your Name  
+""")
 
-# ================= HELPER FUNCTIONS =================
-def predict_emotion(image, model):
-    img = transform(image).unsqueeze(0).to(DEVICE)
-    with torch.no_grad():
-        output = model(img)
-        prob = nn.Softmax(dim=1)(output)
-        _, pred = torch.max(output, 1)
-    return EMOTIONS[pred.item()], prob.cpu().numpy()[0]
+# Select input mode
+mode = st.radio("Choose input source:", ["Upload Image", "Use Webcam"])
 
 # ================= IMAGE UPLOAD =================
-if uploaded_file is not None:
-    image = Image.open(uploaded_file).convert("RGB")
-    st.image(image, caption="Uploaded Image", use_column_width=True)
-    emotion, prob = predict_emotion(image, model)
-    st.write(f"**Predicted Emotion:** {emotion}")
-    st.bar_chart({EMOTIONS[i]: float(prob[i]) for i in range(NUM_CLASSES)})
+if mode == "Upload Image":
+    uploaded_file = st.file_uploader("Choose an image...", type=["jpg","jpeg","png"])
+    if uploaded_file is not None:
+        image = Image.open(uploaded_file)
+        st.image(image, caption="Uploaded Image", use_column_width=True)
+        image_tensor = transform(image).unsqueeze(0).to(DEVICE)
+        with torch.no_grad():
+            output = model(image_tensor)
+            pred = CLASSES[output.argmax(1).item()]
+        st.success(f"Predicted Emotion: **{pred}**")
 
-# ================= CAMERA =================
-if run_camera:
+# ================= WEBCAM =================
+elif mode == "Use Webcam":
     stframe = st.empty()
+    run = st.button("Start Webcam")
     cap = cv2.VideoCapture(0)
-    st.write("Press 'q' to stop camera.")
-
-    while True:
+    
+    while run:
         ret, frame = cap.read()
         if not ret:
-            st.warning("Failed to access camera.")
+            st.warning("Could not access webcam")
             break
-
-        # Convert to RGB
-        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        pil_image = Image.fromarray(rgb_frame)
-
-        # Predict emotion
-        emotion, prob = predict_emotion(pil_image, model)
-
-        # Display on frame
-        cv2.putText(frame, f"{emotion}", (10, 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-        stframe.image(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB), channels="RGB", use_column_width=True)
-
-        # Stop condition
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
-
+        # Convert to PIL Image
+        img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        img_pil = Image.fromarray(img_rgb)
+        
+        # Preprocess
+        image_tensor = transform(img_pil).unsqueeze(0).to(DEVICE)
+        with torch.no_grad():
+            output = model(image_tensor)
+            pred = CLASSES[output.argmax(1).item()]
+        
+        # Display prediction on frame
+        cv2.putText(frame, f"Emotion: {pred}", (10,30), cv2.FONT_HERSHEY_SIMPLEX, 
+                    1, (0,255,0), 2, cv2.LINE_AA)
+        stframe.image(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+        
     cap.release()
-    cv2.destroyAllWindows()
