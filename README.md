@@ -6,4 +6,4 @@ The proposed system classifies facial expressions into seven categories: Angry, 
 
 To address overfitting and class imbalance, the model incorporates Batch Normalization, Dropout, Class Weights, Label Smoothing, Learning Rate Scheduling, and Early Stopping. Experimental results show that while the training accuracy exceeds 90%, the test accuracy improves significantly to approximately 62–70%, demonstrating effective generalization.
 
-The trained model and training history are saved for evaluation and deployment. The system is designed to be easily extendable to real-time emotion detection using a webcam and a Streamlit-based interactive web interface.
+The trained model is saved for evaluation and deployment. The system is designed to be easily extendable to real-time emotion detection using a webcam and a Streamlit-based interactive web interface.
